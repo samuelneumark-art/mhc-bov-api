@@ -1,4 +1,4 @@
-import os, io, base64
+import os, io, base64, traceback
 from flask import Flask, request, jsonify
 from openpyxl import load_workbook
 
@@ -12,39 +12,57 @@ def add_cors(r):
     r.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     return r
 
+@app.route("/test", methods=["GET"])
+def test():
+    try:
+        wb = load_workbook(io.BytesIO(base64.b64decode(TEMPLATE_B64)))
+        return jsonify({"status": "ok", "sheets": wb.sheetnames})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e), "trace": traceback.format_exc()})
+
 @app.route("/generate-bov", methods=["POST","OPTIONS"])
 def generate_bov():
     if request.method == "OPTIONS":
         return "", 200
     try:
-        d = request.get_json()
+        d = request.get_json(force=True)
+        if not d:
+            return jsonify({"success": False, "error": "No JSON received"}), 400
+
         wb = load_workbook(io.BytesIO(base64.b64decode(TEMPLATE_B64)))
         wb.calculation.iterate = True
         wb.calculation.iterateCount = 100
         wb.calculation.iterateDelta = 0.001
         wb["Sales Comps"].sheet_state = "visible"
         wb["Rent Comps"].sheet_state = "visible"
-        prop  = d["propName"]
-        today = d["today"]
-        year  = int(d["year"])
+
+        prop  = str(d.get("propName","Property"))
+        today = str(d.get("today",""))
+        year  = int(d.get("year", 2026))
+        units = int(d.get("units", 0))
+        occupied = int(d.get("occupied", units))
+        cap_rate = float(d.get("capRate", 0.05))
 
         def sv(ws, addr, val):
             if val is not None and val != "":
-                ws[addr].value = val
+                try:
+                    ws[addr].value = val
+                except Exception as ex:
+                    print(f"Error setting {addr}: {ex}")
 
         # BOV Summary
         ws = wb["BOV Summary"]
-        sv(ws,"A3", prop + "  |  " + d["address"] + "  |  " + str(d["units"]) + " Units  |  Confidential")
+        sv(ws,"A3", prop + "  |  " + str(d.get("address","")) + "  |  " + str(units) + " Units  |  Confidential")
         sv(ws,"A4", "Prepared by: Northmarq  |  " + today)
         sv(ws,"C11", prop)
-        sv(ws,"F11", int(d["units"]))
+        sv(ws,"F11", units)
         sv(ws,"C12", "Manufactured Housing Community")
-        sv(ws,"F12", int(d["occupied"]))
-        sv(ws,"C13", d["address"])
-        sv(ws,"C14", d.get("rentRange",""))
-        sv(ws,"C15", d.get("mgmt",""))
+        sv(ws,"F12", occupied)
+        sv(ws,"C13", str(d.get("address","")))
+        sv(ws,"C14", str(d.get("rentRange","")))
+        sv(ws,"C15", str(d.get("mgmt","")))
         sv(ws,"F15", year)
-        sv(ws,"F24", float(d["capRate"]))
+        sv(ws,"F24", cap_rate)
 
         # Income Statement
         ws = wb["Income Statement"]
@@ -66,7 +84,10 @@ def generate_bov():
             ("C58","payrollTax"),("C59","payrollProcessing"),
         ]
         for addr, key in income_fields:
-            if d.get(key): sv(ws, addr, float(d[key]))
+            val = d.get(key)
+            if val:
+                try: sv(ws, addr, float(val))
+                except: pass
 
         # Clear D and E columns for manual input
         rows_to_clear = [7,8,9,10,11,12,13,15,16,17,18,19,
@@ -74,35 +95,38 @@ def generate_bov():
                          44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59]
         for row in rows_to_clear:
             for col in ["D","E"]:
-                ws[col + str(row)].value = None
+                try: ws[col + str(row)].value = None
+                except: pass
 
         # Sales Comps
         ws = wb["Sales Comps"]
         sv(ws,"B3", prop + "  |  Enter comps manually  |  " + today)
         sales_cols = ["B","C","D","E","F","G","H","I","J","K"]
-        for i, row in enumerate(d.get("salesComps",[])[:10]):
+        for i, row_data in enumerate(d.get("salesComps",[])[:10]):
             excel_row = 7 + i
             for j, col in enumerate(sales_cols):
-                if j < len(row) and row[j] not in [None,"","nan"]:
-                    val = row[j]
+                if j < len(row_data) and row_data[j] not in [None,"","nan"]:
+                    val = row_data[j]
                     if col in ["D","F","G","I"]:
                         try: val = float(str(val).replace(",","").replace("$","").replace("%",""))
                         except: pass
-                    ws[col + str(excel_row)].value = val
+                    try: ws[col + str(excel_row)].value = val
+                    except: pass
 
         # Rent Comps
         ws = wb["Rent Comps"]
         sv(ws,"B3", prop + "  |  Enter rent comps manually  |  " + today)
         rent_cols = ["B","C","D","E","F","G","H","I","J"]
-        for i, row in enumerate(d.get("rentComps",[])[:10]):
+        for i, row_data in enumerate(d.get("rentComps",[])[:10]):
             excel_row = 7 + i
             for j, col in enumerate(rent_cols):
-                if j < len(row) and row[j] not in [None,"","nan"]:
-                    val = row[j]
+                if j < len(row_data) and row_data[j] not in [None,"","nan"]:
+                    val = row_data[j]
                     if col in ["D","E","F","G","I"]:
                         try: val = float(str(val).replace(",","").replace("$","").replace("%",""))
                         except: pass
-                    ws[col + str(excel_row)].value = val
+                    try: ws[col + str(excel_row)].value = val
+                    except: pass
 
         # 5-Year Cash Flow
         ws = wb["5-Year Cash Flow"]
@@ -110,10 +134,13 @@ def generate_bov():
 
         buf = io.BytesIO()
         wb.save(buf)
-        return jsonify({"success": True, "b64": base64.b64encode(buf.getvalue()).decode()})
+        result = base64.b64encode(buf.getvalue()).decode()
+        return jsonify({"success": True, "b64": result})
+
     except Exception as e:
-        import traceback
-        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+        tb = traceback.format_exc()
+        print("ERROR:", tb)
+        return jsonify({"success": False, "error": str(e), "trace": tb}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
