@@ -19,16 +19,11 @@ def generate_bov():
     try:
         d = request.get_json()
         wb = load_workbook(io.BytesIO(base64.b64decode(TEMPLATE_B64)))
-
-        # Enable iterative calculation
         wb.calculation.iterate = True
         wb.calculation.iterateCount = 100
         wb.calculation.iterateDelta = 0.001
-
-        # Unhide Sales Comps and Rent Comps
         wb["Sales Comps"].sheet_state = "visible"
         wb["Rent Comps"].sheet_state = "visible"
-
         prop  = d["propName"]
         today = d["today"]
         year  = int(d["year"])
@@ -37,10 +32,10 @@ def generate_bov():
             if val is not None and val != "":
                 ws[addr].value = val
 
-        # ── BOV Summary ──────────────────────────────
+        # BOV Summary
         ws = wb["BOV Summary"]
-        sv(ws,"A3", f"{prop}  |  {d['address']}  |  {d['units']} Units  |  Confidential")
-        sv(ws,"A4", f"Prepared by: Northmarq  |  {today}")
+        sv(ws,"A3", prop + "  |  " + d["address"] + "  |  " + str(d["units"]) + " Units  |  Confidential")
+        sv(ws,"A4", "Prepared by: Northmarq  |  " + today)
         sv(ws,"C11", prop)
         sv(ws,"F11", int(d["units"]))
         sv(ws,"C12", "Manufactured Housing Community")
@@ -51,10 +46,10 @@ def generate_bov():
         sv(ws,"F15", year)
         sv(ws,"F24", float(d["capRate"]))
 
-        # ── Income Statement ─────────────────────────
+        # Income Statement
         ws = wb["Income Statement"]
-        sv(ws,"A3", f"{prop}  |  January - December {year-1}  |  Accrual Basis")
-        sv(ws,"A4", f"Northmarq  |  {today}")
+        sv(ws,"A3", prop + "  |  January - December " + str(year-1) + "  |  Accrual Basis")
+        sv(ws,"A4", "Northmarq  |  " + today)
         income_fields = [
             ("C7","lotRent"),("C8","storageFees"),("C9","appFees"),
             ("C10","lateFees"),("C11","concessions"),("C12","cableIncome"),
@@ -79,45 +74,39 @@ def generate_bov():
                          44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59]
         for row in rows_to_clear:
             for col in ["D","E"]:
-                ws[f"{col}{row}"].value = None
+                ws[col + str(row)].value = None
 
-        # ── Sales Comps ──────────────────────────────
+        # Sales Comps
         ws = wb["Sales Comps"]
-        sv(ws,"B3", f"{prop}  |  Enter comps manually — all blue cells are inputs  |  {today}")
-        sales_comps = d.get("salesComps", [])
-        # Columns: B=Park Name, C=Address, D=Sale Price, E=Sale Date, F=Units, G=Cap Rate, H=Utility, I=Lot Rent, J=Distance, K=Notes
+        sv(ws,"B3", prop + "  |  Enter comps manually  |  " + today)
         sales_cols = ["B","C","D","E","F","G","H","I","J","K"]
-        for i, row in enumerate(sales_comps[:10]):
+        for i, row in enumerate(d.get("salesComps",[])[:10]):
             excel_row = 7 + i
             for j, col in enumerate(sales_cols):
-                if j < len(row) and row[j] not in [None, "", "nan"]:
+                if j < len(row) and row[j] not in [None,"","nan"]:
                     val = row[j]
-                    # Try to convert numeric columns
-                    if col in ["D","F","G","I"] and val:
+                    if col in ["D","F","G","I"]:
                         try: val = float(str(val).replace(",","").replace("$","").replace("%",""))
                         except: pass
-                    ws[f"{col}{excel_row}"].value = val
+                    ws[col + str(excel_row)].value = val
 
-        # ── Rent Comps ───────────────────────────────
+        # Rent Comps
         ws = wb["Rent Comps"]
-        sv(ws,"B3", f"{prop}  |  Enter rent comps manually — all blue cells are inputs  |  {today}")
-        rent_comps = d.get("rentComps", [])
-        # Columns: B=Park Name, C=Address, D=Units, E=Avg Lot Rent, F=Min, G=Max, H=Utility, I=Occupancy, J=Distance
+        sv(ws,"B3", prop + "  |  Enter rent comps manually  |  " + today)
         rent_cols = ["B","C","D","E","F","G","H","I","J"]
-        for i, row in enumerate(rent_comps[:10]):
+        for i, row in enumerate(d.get("rentComps",[])[:10]):
             excel_row = 7 + i
             for j, col in enumerate(rent_cols):
-                if j < len(row) and row[j] not in [None, "", "nan"]:
+                if j < len(row) and row[j] not in [None,"","nan"]:
                     val = row[j]
-                    if col in ["D","E","F","G","I"] and val:
+                    if col in ["D","E","F","G","I"]:
                         try: val = float(str(val).replace(",","").replace("$","").replace("%",""))
                         except: pass
-                    ws[f"{col}{excel_row}"].value = val
+                    ws[col + str(excel_row)].value = val
 
-        # ── 5-Year Cash Flow ─────────────────────────
+        # 5-Year Cash Flow
         ws = wb["5-Year Cash Flow"]
-        sv(ws,"A2", f"{prop}  |  Projected {year} - {year+4}  |  Capital Markets as of {today}")
-        sv(ws,"A4", f"Northmarq  |  {today}")
+        sv(ws,"A2", prop + "  |  Projected " + str(year) + " - " + str(year+4) + "  |  Capital Markets as of " + today)
 
         buf = io.BytesIO()
         wb.save(buf)
