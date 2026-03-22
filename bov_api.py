@@ -1,4 +1,4 @@
-import os, io, base64, json
+import os, io, base64
 from flask import Flask, request, jsonify
 from openpyxl import load_workbook
 
@@ -21,28 +21,44 @@ def generate_bov():
         d = request.get_json()
         wb = load_workbook(io.BytesIO(base64.b64decode(TEMPLATE_B64)))
 
+        # Enable iterative calculation
+        wb.calculation.iterate = True
+        wb.calculation.iterateCount = 100
+        wb.calculation.iterateDelta = 0.001
+
+        # Unhide Sales Comps and Rent Comps
+        wb["Sales Comps"].sheet_state = "visible"
+        wb["Rent Comps"].sheet_state = "visible"
+
+        prop  = d["propName"]
+        today = d["today"]
+        year  = int(d["year"])
+        short = prop  # short name for headers
+
         def sv(ws, addr, val):
             if val is not None and val != "":
                 ws[addr].value = val
 
-        # BOV Summary
+        # ── BOV Summary ──────────────────────────────
         ws = wb["BOV Summary"]
-        sv(ws,"A3", f"{d['propName']}  |  {d['address']}  |  {d['units']} Units  |  Confidential")
-        sv(ws,"A4", f"Prepared by: Northmarq  |  {d['today']}")
-        sv(ws,"C11", d["propName"])
+        sv(ws,"A3", f"{prop}  |  {d['address']}  |  {d['units']} Units  |  Confidential")
+        sv(ws,"A4", f"Prepared by: Northmarq  |  {today}")
+        sv(ws,"C11", prop)
         sv(ws,"F11", int(d["units"]))
         sv(ws,"C12", "Manufactured Housing Community")
         sv(ws,"F12", int(d["occupied"]))
         sv(ws,"C13", d["address"])
         sv(ws,"C14", d.get("rentRange",""))
         sv(ws,"C15", d.get("mgmt",""))
-        sv(ws,"F15", int(d["year"]))
+        sv(ws,"F15", year)
         sv(ws,"F24", float(d["capRate"]))
 
-        # Income Statement
+        # ── Income Statement ─────────────────────────
         ws = wb["Income Statement"]
-        sv(ws,"A3", f"{d['propName']}  |  January - December {int(d['year'])-1}  |  Accrual Basis")
-        fields = [
+        sv(ws,"A3", f"{short}  |  January - December {year-1}  |  Accrual Basis")
+        sv(ws,"A4", f"Northmarq  |  {today}")
+
+        income_fields = [
             ("C7","lotRent"),("C8","storageFees"),("C9","appFees"),
             ("C10","lateFees"),("C11","concessions"),("C12","cableIncome"),
             ("C13","miscIncome"),("C15","gasBilled"),("C16","waterBilled"),
@@ -57,19 +73,36 @@ def generate_bov():
             ("C55","residentMgrSalary"),("C56","rmLabor"),("C57","management"),
             ("C58","payrollTax"),("C59","payrollProcessing"),
         ]
-        for addr, key in fields:
-            if d.get(key):
-                sv(ws, addr, float(d[key]))
+        for addr, key in income_fields:
+            if d.get(key): sv(ws, addr, float(d[key]))
 
-        # 5-Year Cash Flow
+        # Clear D and E columns (2026 w/ Rent Increase + Normalized) for manual input
+        rows_to_clear = [7,8,9,10,11,12,13,15,16,17,18,19,
+                         27,28,29,30,31,34,35,36,37,38,39,40,41,42,43,
+                         44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59]
+        for row in rows_to_clear:
+            for col in ["D","E"]:
+                ws[f"{col}{row}"].value = None
+
+        # ── Sales Comps ──────────────────────────────
+        ws = wb["Sales Comps"]
+        sv(ws,"B3", f"{short}  |  Enter comps manually — all blue cells are inputs  |  {today}")
+
+        # ── Rent Comps ───────────────────────────────
+        ws = wb["Rent Comps"]
+        sv(ws,"B3", f"{short}  |  Enter rent comps manually — all blue cells are inputs  |  {today}")
+
+        # ── 5-Year Cash Flow ─────────────────────────
         ws = wb["5-Year Cash Flow"]
-        sv(ws,"A2", f"{d['propName']}  |  Projected {d['year']} - {int(d['year'])+4}  |  Capital Markets as of {d['today']}")
+        sv(ws,"A2", f"{short}  |  Projected {year} - {year+4}  |  Capital Markets as of {today}")
+        sv(ws,"A4", f"Northmarq  |  {today}")
 
         buf = io.BytesIO()
         wb.save(buf)
         return jsonify({"success": True, "b64": base64.b64encode(buf.getvalue()).decode()})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
