@@ -78,7 +78,7 @@ def find_jlt_match(park_name, city='', state=''):
         # Hard-exclude cross-state matches when state is known
         if state and p.get('state','') and state.upper() != p['state'].upper():
             continue
-        p_city = p.get('city', '').strip()
+        p_city = (p.get('city') or '').strip()
         if city:
             if p_city:
                 # JLT entry has a city — must match exactly
