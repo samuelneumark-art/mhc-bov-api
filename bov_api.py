@@ -39,12 +39,13 @@ def save_jlt_db(parks):
         pass  # Render filesystem may be read-only
 
 def normalize(s):
-    """Normalize string for fuzzy matching"""
+    """Normalize string for fuzzy matching.
+    Only strip true generic type designators — NOT distinctive name words like
+    village, estates, park, ridge etc. which are often the whole identity of a park."""
     s = s.lower()
-    for w in ['mobile home park','mobile home community','manufactured home park',
-              'manufactured housing community','mhp','mhc','village','estates',
-              'community','park','manor','court','acres','heights','ridge','valley',
-              'meadows','pines','oaks','hills','lakes','terrace','gardens']:
+    for w in ['mobile home park', 'mobile home community', 'manufactured home park',
+              'manufactured housing community', 'mobile home estates', 'mobile home village',
+              'manufactured home community', 'mhp', 'mhc', 'mhe']:
         s = s.replace(w, '')
     return re.sub(r'[^a-z0-9\s]', '', s).strip()
 
