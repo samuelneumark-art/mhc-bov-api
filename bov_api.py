@@ -77,14 +77,29 @@ def find_jlt_match(park_name, city='', state=''):
         # Hard-exclude cross-state matches when state is known
         if state and p.get('state','') and state.upper() != p['state'].upper():
             continue
-        # Hard-exclude cross-city matches when city is known
-        if city and p.get('city','') and city.lower().strip() != p['city'].lower().strip():
-            continue
-        score = match_score(park_name, p['name'], city, p.get('city',''))
-        if score > best_score:
-            best_score = score
-            best_match = p
-    if best_score >= 75:
+        p_city = p.get('city', '').strip()
+        if city:
+            if p_city:
+                # JLT entry has a city — must match exactly
+                if city.lower().strip() != p_city.lower():
+                    continue
+                score = match_score(park_name, p['name'], city, p_city)
+                if score >= 75 and score > best_score:
+                    best_score = score
+                    best_match = p
+            else:
+                # JLT entry has no city — require near-exact name match (90+)
+                score = match_score(park_name, p['name'], city, '')
+                if score >= 90 and score > best_score:
+                    best_score = score
+                    best_match = p
+        else:
+            # No city provided — use normal scoring
+            score = match_score(park_name, p['name'], '', p_city)
+            if score >= 75 and score > best_score:
+                best_score = score
+                best_match = p
+    if best_score > 0:
         return best_match, best_score
     return None, 0
 
