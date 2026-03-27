@@ -72,10 +72,10 @@ def find_jlt_match(park_name, city='', state=''):
     best_score = 0
     best_match = None
     for p in db:
-        score = match_score(park_name, p['name'], city, p.get('city',''))
-        # State filter if provided
+        # Hard-exclude cross-state matches when state is known
         if state and p.get('state','') and state.upper() != p['state'].upper():
-            score = int(score * 0.3)
+            continue
+        score = match_score(park_name, p['name'], city, p.get('city',''))
         if score > best_score:
             best_score = score
             best_match = p
