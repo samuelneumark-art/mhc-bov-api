@@ -53,8 +53,10 @@ def match_score(name1, name2, city1='', city2=''):
     n1, n2 = normalize(name1), normalize(name2)
     # Exact match
     if n1 == n2: return 100
-    # One contains the other
-    if n1 in n2 or n2 in n1: return 85
+    # One contains the other (only if normalized name has 2+ words to avoid single-word false matches)
+    shorter = n1 if len(n1) <= len(n2) else n2
+    if (n1 in n2 or n2 in n1) and len(shorter.split()) >= 2:
+        return 85
     # Word overlap
     words1 = set(n1.split())
     words2 = set(n2.split())
@@ -75,11 +77,14 @@ def find_jlt_match(park_name, city='', state=''):
         # Hard-exclude cross-state matches when state is known
         if state and p.get('state','') and state.upper() != p['state'].upper():
             continue
+        # Hard-exclude cross-city matches when city is known
+        if city and p.get('city','') and city.lower().strip() != p['city'].lower().strip():
+            continue
         score = match_score(park_name, p['name'], city, p.get('city',''))
         if score > best_score:
             best_score = score
             best_match = p
-    if best_score >= 60:
+    if best_score >= 75:
         return best_match, best_score
     return None, 0
 
