@@ -40,12 +40,13 @@ def save_jlt_db(parks):
 
 def normalize(s):
     """Normalize string for fuzzy matching.
-    Only strip true generic type designators — NOT distinctive name words like
-    village, estates, park, ridge etc. which are often the whole identity of a park."""
+    Strip full-form generic designators but keep short abbreviations (mhp/mhc/mhe/mhv)
+    since they distinguish between different parks at the same location.
+    e.g. 'Hacienda MHC' vs 'Hacienda MHE' are different parks and should not cross-match."""
     s = s.lower()
     for w in ['mobile home park', 'mobile home community', 'manufactured home park',
               'manufactured housing community', 'mobile home estates', 'mobile home village',
-              'manufactured home community', 'mhp', 'mhc', 'mhe']:
+              'manufactured home community']:
         s = s.replace(w, '')
     return re.sub(r'[^a-z0-9\s]', '', s).strip()
 
