@@ -222,7 +222,7 @@ def research_rents():
                     import anthropic
                     client = anthropic.Anthropic(api_key=api_key)
                     message = client.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=2000,
                         system="""You are a manufactured housing market analyst. Estimate current lot rents for each park based on name and location. Respond ONLY with a JSON array, no markdown:
 [{"index":1,"avg_rent":850,"min_rent":800,"max_rent":900,"spaces":120,"utility":"Tenant-paid","source":"AI Estimate","confidence":"medium"}]
